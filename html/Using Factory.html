@@ -1,10 +1,67 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ng-app="demoApp">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>使用工厂</title>
+    <script src="../angular-1.5.8/angular.js"></script>
+    <script src="../angular-1.5.8/angular-route.js"></script>
 </head>
 <body>
-
+<div>
+    <div data-ng-view=""></div>
+</div>
 </body>
+<script>
+    let demoApp = angular.module('demoApp', ['ngRoute']);
+
+    demoApp.config(function ($routeProvider) {
+        $routeProvider
+            .when('/',
+                {
+                    controller: 'SimpleController',
+                    templateUrl: 'view1.html'
+                })
+            .when('/view2',
+                {
+                    controller: 'SimpleController',
+                    templateUrl: 'view2.html'
+                })
+            .otherwise({ redirecTo: '/' });
+    });
+
+    // 所有的数据放在factory里面，进行组装处理
+    demoApp.factory('simpleFactory', function () {
+        let customers = [
+            { name: 'Terry Wu', city: 'Phoenix' },
+            { name: 'Terry Song', city: 'NewYork' },
+            { name: 'Terry Dow', city: 'NewYork' },
+            { name: 'Henry Dow', city: 'NewYork' }
+        ];
+
+        let factory = {};
+
+        factory.getCustomers = function () {
+            return customers;
+        };
+
+        return factory;
+    });
+
+    let controllers = {};
+    controllers.SimpleController = function ($scope, simpleFactory) {
+        $scope.customers = [];
+
+        init();
+        
+        function init() {
+            $scope.customers = simpleFactory.getCustomers();    // 赋值
+        }
+
+        $scope.addCustomer = function () {
+            $scope.customers.push({name: $scope.newCustomer.name, city: $scope.newCustomer.city});
+        }
+    };
+
+    demoApp.controller(controllers);
+</script>
 </html>

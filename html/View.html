@@ -11,7 +11,7 @@
     <div data-ng-view=""></div>
 </div>
 <script>
-    let demoApp = angular.module('demoApp', ['ngRoute']);
+    var demoApp = angular.module('demoApp', ['ngRoute']);
 
     demoApp.config(function ($routeProvider) {
         $routeProvider
@@ -25,10 +25,10 @@
                     controller: 'SimpleController',
                     templateUrl: 'view2.html'
                 })
-            .otherwise({redirectTo: '/'});
+            .otherwise({redirectTo:'/'});
     });
 
-    let controllers = {};
+    var controllers = {};
     controllers.SimpleController = function ($scope) {
         $scope.customers = [
             { name: 'Terry Wu', city: 'Phoenix' },
@@ -40,7 +40,8 @@
         $scope.addCustomer = function () {
             $scope.customers.push({ name: $scope.newCustomer.name, city: $scope.newCustomer.city });
         };
-    };
+    }
+
     demoApp.controller(controllers);
 </script>
 </body>
