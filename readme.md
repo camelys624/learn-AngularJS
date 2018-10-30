@@ -18,5 +18,5 @@ AngularJS提供了很多功能丰富的组件，处理核心的ng组件外，还
 - ngSanitize
 - ngMock
 
-#### AngularJS简介(Introduction)
+### AngularJS简介(Introduction)
 AngularJS是一个开发动态web应用的框架

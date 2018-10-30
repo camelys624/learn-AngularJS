@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<div>
+    <h2>View1</h2>
+    names:
+    <br />
+    <input type="text" data-ng-model="filter.name">
+    <br/>
+    <ul>
+        <li data-ng-repeat="cust in customers | filter:filter.name | orderBy: 'city'">
+            {{cust.name | uppercase}} - {{cust.city | lowercase}}
+        </li>
+    </ul>
+    <br/>
+    Customer Names:
+    <br/>
+    <input type="text" data-ng-model="newCustomer.name">
+    <br/>
+    <input type="text" data-ng-model="newCustomer.city">
+    <br/>
+    <button data-ng-click="addCustomer()">Add Customer</button>
+    <br/>
+    <a href="#/view2">View 2</a>
+</div>
+</body>
+</html>
