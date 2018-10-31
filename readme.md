@@ -130,3 +130,223 @@ Angular代码运行时遵循的顺序：
 | 注入器(injector)               | 用来实现依赖注入(Injection)的容器                                                        |
 | 模块(Module)                   | 用来配置注入器                                                                           |
 | 服务(Service)                  | 独立于视图(View)的、可复用的业务逻辑                                                     |
+
+#### 数据绑定
+
+``` html
+数量：<input type="text" ng-model="qty" required>
+<b>总价：{{qty}}</b>
+```
+
+第一类是指令(directive)
+
+第二类新标记是双大括号`{{ expression | filter }}`,其中expression是表达式语句，filter是过滤器语句。
+
+Angular提供了动态(live)的绑定：当input元素的值变化的时候，表达式的值也会自动重新计算，并且DOM所呈现的内容也会随着这些值的变化而自动更新。这种模型(model)与视图(view)的联动就叫做"双向数据绑定"。
+
+#### 添加UI逻辑：控制器
+
+``` html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="../angular-1.5.8/angular.js"></script>
+</head>
+<body>
+<div ng-app="invoice1" ng-controller="InvoiceController as invoice">
+    <b>Invoice:</b>
+    <div>
+        Quantity: <input type="number" min="0" ng-model="invoice.qty" required>
+    </div>
+    <div>
+        Costs: <input type="number" min="0" ng-model="invoice.cost" required>
+        <select ng-model="invoice.inCurr">
+            <option ng-repeat="c in invoice.currencies">{{c}}</option>
+        </select>
+    </div>
+    <div>
+        <b>Total:</b>
+        /* 注意currency过滤器后面跟的是冒号： */
+        <span ng-repeat="c in invoice.currencies">
+            {{invoice.total(c) | currency:c}}
+        </span><br>
+        <button class="btn" ng-click="invoice.pay()">Pay</button>
+    </div>
+</div>
+</body>
+<script>
+    angular.module('invoice1', [])
+        .controller('InvoiceController', function InvoiceController() {
+            this.qty = 1;
+            this.cost = 2;
+            this.inCurr = 'CNY';
+            this.currencies = ['USD', 'EUR', 'CNY'];
+            this.usdToForeignRates = {
+                USD: 1,
+                EUR: 0.74,
+                CNY: 6.09
+            };
+
+            this.total = function total(outCurr) {
+                return this.convertCurrency(this.qty * this.cost, this.inCurr, outCurr);
+            };
+            this.convertCurrency = function convertCurrency(amount, inCurr, outCurr) {
+                return amount * this.usdToForeignRates[outCurr] / this.usdToForeignRates[inCurr];
+            };
+            this.pay = function pay() {
+                window.alert('Thanks!');
+            };
+        });
+</script>
+</html>
+```
+
+![](image/6.png)
+
+在javascript标签中，在这里，定义了一个被称为“控制器(controller)”的函数。控制器的用途是导出一些变量和函数，供模板的表达式(expression)和指令(directive)使用。
+
+在创建一个控制器的同时，我们还往HTML中添加了一个`ng-controller`指令。这个指令告诉Angular,我们创建的这个`InvoiceController`控制器将会负责管理这个带有ng-controller指令的div节点，及其各级子节点。`InvoiceController as invoice`这个语法告诉Angular:创建这个`InvoiceController`的实例，并且把这个实例赋值给当前作用域(Scope)中的`invoice`变量。
+
+同时，我们修改了页面中所有用于读写Scope变量的表达式，给他们加上了一个`invoice.`前缀。
+
+在这个script标签中，我们还创建了一个模块(module),并且在这个模块中注册了控制器(controller)。
+
+下图表现的是我们生命了这个控制器(controller)之后，它们是如何协作的。
+
+![](image/7.png)
+
+#### 与视图(View)无关的业务逻辑：服务(Service)
+
+现在，`InvoiceController`包含了我们这个例子中的所有逻辑。如果这个应用程序的规模继续成长，最好的方法是：把控制器中与视图无关的逻辑都移到“服务(service)”中。以便这个应用程序的其他部分也能复用这些逻辑。
+
+重构例子，把币种兑换的逻辑移入到一个独立的服务(service)中。
+
+``` html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <script src="../angular-1.5.8/angular.js"></script>
+    <script src="../js/finance.js"></script>
+    <script src="../js/invoice.js"></script>
+</head>
+<body>
+<div ng-app="invoice" ng-controller="InvoiceController as invoice">
+    <b>Invoice:</b>
+    <div>
+        Quantity: <input type="number" min="0" ng-model="invoice.qty" required>
+    </div>
+    <div>
+        Costs: <input type="number" min="0" ng-model="invoice.cost" required>
+        <select ng-model="invoice.inCurr">
+            <option ng-repeat="c in invoice.currencies">{{c}}</option>
+        </select>
+    </div>
+    <div>
+        <b>Total:</b>
+        <span ng-repeat="c in invoice.currencies">
+            {{invoice.total(c) | currency:c}}
+        </span><br>
+        <button class="btn" ng-click="invoice.pay()">Pay</button>
+    </div>
+</div>
+</body>
+</html>
+```
+
+``` js
+angular.module('invoice', ['finance'])
+    .controller('InvoiceController', ['currencyConverter', function (currencyConverter) {
+        this.qty = 1;
+        this.cost = 2;
+        this.inCurr = 'EUR';
+        this.currencies = currencyConverter.currencies;
+
+        this.total = function (outCurr) {
+            return currencyConverter.convert(this.qty * this.cost, this.inCurr, outCurr);
+        };
+
+        this.pay = function () {
+            window.alert('谢谢！！');
+        }
+    }]);
+```
+
+``` js
+angular.module('finance', [])
+    .factory('currencyConverter', function () {
+       let currencies = ['USD', 'EUR', 'CNY'],
+           usdToForeignRates = {
+               USD: 1,
+               EUR:0.74,
+               CNY: 6.09
+           };
+       return {
+           currencies: currencies,
+           convert: convert
+       };
+
+       function convert(amount, inCurr, outCurr) {
+           return amount * usdToForeignRates[outCurr] / usdToForeignRates[inCurr];
+       }
+    });
+```
+
+我们把`convertCurrency``函数所支持的币种的定义独立到一个新文件：finance.js。
+
+我们通过"依赖注入(Dependency Injection)"的方式找到这个独立的函数。依赖注入(DI)是一种设计模式(Design Pattern),它用于解决下列问题：我们创建了对象和函数，但是它们怎么得到自己所依赖的对象。
+
+Angular中的每一样东西都是用依赖注入的方式来创建和使用的，比如指令、过滤器、控制器、服务。在Angular中，依赖注入的容器叫做"注入器"。
+
+要进行依赖注入，必须先把这些需要协同工作的对象和函数注册(Register)到某个地方。在Angular中，这个地方叫模块。
+
+前面一个例子中：模板包含了一个`ng-app="invoice"`指令。这告诉Angular使用invoice模块作为该应用程序的主模块。`angular.module('invoice', ['finance'])`表示：`invoice`模块依赖于`finance`模块。这样一来，Angular就能同时使用`InvoiceController`这个控制器和`currencyConverter`这个服务了。
+
+`InvoiceController`该怎样获得这个`currencyConverter`函数的引用，在Angular中,这非常简单，只要在构造函数中定义一些具有特定名字的参数就可以了。这时，注入器就可以按照正确的依赖关系创建这些对象，并且根据名字把它们传入那些依赖它们的对象工厂中。在前面的代码中，`InvoiceController`有一个叫`currencyConverter`的参数。根据这个参数，Angular就知道`InvoiceController`依赖于`currencyConverter`,取得`currencyConverter`服务的俄实例，并且把它作为参数传给`InvoiceController`的构造函数。
+
+最后一点是我们把一个数组作为参数传入到`module.controller`函数中，而不再是一个普通的函数。这个数组前面部分的元素包含这个控制器所依赖的一系列服务的名字，最后一个元素则是这个控制器的构造函数。这样做的用处是：避免js代码压缩器(Minifier)破坏这个“依赖注入”的过程。
+
+#### 访问后端
+
+通过Yahoo finance API来获取货币之间的当前汇率。
+
+``` js
+angular.module('finance', [])
+    .factory('currencyConverter', ['$http', function($http) {
+        var YAHOO_FINANCE_URL_PATTERN =
+            'http://query.yahooapis.com/v1/public/yql?q=select * from '+
+            'yahoo.finance.xchange where pair in ("PAIRS")&format=json&'+
+            'env=store://datatables.org/alltableswithkeys&callback=JSON_CALLBACK',
+            currencies = ['USD', 'EUR', 'CNY'],
+            usdToForeignRates = {};
+        refresh();
+        return {
+            currencies: currencies,
+            convert: convert,
+            refresh: refresh
+        };
+
+        function convert(amount, inCurr, outCurr) {
+            return amount * usdToForeignRates[outCurr] * 1 / usdToForeignRates[inCurr];
+        }
+
+        function refresh() {
+            var url = YAHOO_FINANCE_URL_PATTERN.
+            replace('PAIRS', 'USD' + currencies.join('","USD'));
+            return $http.jsonp(url).success(function(data) {
+                console.log(data);
+                var newUsdToForeignRates = {};
+                angular.forEach(data.query.results.rate, function(rate) {
+                    var currency = rate.id.substring(3,6);
+                    newUsdToForeignRates[currency] = window.parseFloat(rate.Rate);
+                });
+                usdToForeignRates = newUsdToForeignRates;
+            });
+        }
+    }]);
+```
+
+这次我们的`finance`模块中的`currencyConverter`服务使用了`$http`服务--它是由Angular内建的用于访问后端的API服务。是对`XMLHttpRequest`以及JSONP的封装。详情参考$http的API文档-[$http](http://www.angularjs.net.cn/api/105.html)。
