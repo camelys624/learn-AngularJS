@@ -295,7 +295,7 @@ angular.module('finance', [])
     });
 ```
 
-我们把`convertCurrency``函数所支持的币种的定义独立到一个新文件：finance.js。
+我们把`convertCurrency`函数所支持的币种的定义独立到一个新文件：finance.js。
 
 我们通过"依赖注入(Dependency Injection)"的方式找到这个独立的函数。依赖注入(DI)是一种设计模式(Design Pattern),它用于解决下列问题：我们创建了对象和函数，但是它们怎么得到自己所依赖的对象。
 
@@ -349,4 +349,178 @@ angular.module('finance', [])
     }]);
 ```
 
-这次我们的`finance`模块中的`currencyConverter`服务使用了`$http`服务--它是由Angular内建的用于访问后端的API服务。是对`XMLHttpRequest`以及JSONP的封装。详情参考$http的API文档-[$http](http://www.angularjs.net.cn/api/105.html)。
+这次我们的`finance`模块中的`currencyConverter`服务使用了`$http`服务--它是由Angular内建的用于访问后端的API服务。是对`XMLHttpRequest`以及JSONP的封装。详情参考\$http的API文档-[\$http](http://www.angularjs.net.cn/api/105.html)。
+
+### AngularJS Html编译(HTML Compiler)
+
+Angular的`HTML compiler`让开发者可以教浏览器一些新的语法技能。编译器允许我们往现有的HTML元素或属性添加更多的操作逻辑，甚至我们可以自己创建新的带有自定义行为操作的HTML元素或属性。Angular把这些操作扩展称之为`指令`。
+
+Angular预先绑定了一些常见的对构建应用极其有用的指令。同时我们也可以创建一些与我们应用直接相关的指令。这些扩展构成了与特定领域相关的语言来构建你得应用，没有任何服务器端的预编译的介入。
+
+#### 编译器
+
+编译器是Angular提供的一项服务，用来遍历DOM节点，查找特定的属性。编译过程分为两个阶段：
+1. **编译：** 遍历DOM节点，手机所有的指令，返回一个连接函数(link func)
+2. **连接：** 将上一步收集到的每个指令与其所在作用域(scope)连接生成一个实时视图。任何作用域中的模型改变都会实时在视图中反应出来，同时任何用户与视图的交互则会映射到作用域的模型中。**作用域中的数据模型就成了惟一的数据源**。
+
+如`ng-repeat`这样的指令，会为集合中的每个项目克隆一次DOM元素。由于克隆的模板只需要被编译一次，然后为每个克隆实例做一次连接，这样将编译分为编译和连接两个阶段就有效地提升了性能(不需要对每个克隆的实例都编译一次，只需要对模板进行统一的一次编译，然后在连接阶段单独为每个实例进行到scope的连接即可)。***没懂***
+
+#### 指令
+
+在编译过程中，遇到特定的HTML结构(也就是指令)时，指令所生命的行为操作会被触发。指令可以被放在元素名，属性，类名，甚至注释中。下面是一些等价的调用`ng-bind`指令的例子：
+
+``` html
+<span ng-bind="exp"></span>
+<span class="ng-bind: exp;"></span>
+<ng-bind></ng-bind>
+```
+
+指令就是在编译起遍历DOM时碰到就需要执行的函数。
+
+#### 理解视图
+
+绝大多数模板引擎系统采用的是把字符串模板和数据拼接，然后输出一个新的字符串，在前端这个新的字符串作为元素的`innerHTML`属性的值。
+
+![](image/8.png)
+
+这就意味着数据中的任何改变都需要重新和模板合并，然后再赋值给DOM元素的`innerHTML`属性。这里我们可以看到这种策略的一些问题：
+1. 读取用户输入及将其与数据合并
+2. 重写用户输入
+3. 管理整个更新流程
+4. 缺少行为表现
+
+Angular则不同。它的编译器直接使用DOM作为模板而不是用字符串模板。编译阶段的返回结果是一个连接函数(link func)，在连接阶段会和特定的作用域中的数据模型连接生成一个实时的视图。视图和作用域数据模型的绑定是透明的。开发者不需要做任何特别的调用去更新视图。而且，Angular指令不仅可以包含文本绑定，同时也支持行为操作的绑定。
+
+![](image/9.png)
+
+Angular的这种策略生成的是最稳定的DOM模板。DOM元素实例和数据模型实例的绑定在绑定期间是不会发生变化的。这就意味着在我们的代码中可以去获取这些DOM模板元素并且注册相应的事件处理函数，而不用担心这个对DOM元素的引用会因为数据合并而产生变化。
+
+#### 编译指令
+
+一般的是对字符串的拼接，然后再`innerHTML`，Angular的编译是在DOM节点上进行的。通常，我们不会注意到这个约束，因为当一个页面加载时，浏览器自动将HTML解析为DOM树了。
+
+然而，如果我们自己手动调用`$compile`的时候，就需要注意上面的注意点了。因为如果你传给它一个字符串，显然是要报错的。所以在传值给`$compile`之前，用`angular.element`将字符串转化为DOM。
+
+HTML编译可以细分为三个阶段：
+1. `$compile`遍历DOM节点，匹配指令。如果编译器范县某个元素匹配一个指令，那么这个指令就被添加到指令列表中(该列表与DOM元素对应)。一个元素可能匹配到多个指令(也就是一个元素里面有多个指令)。
+2. 当所有指令都匹配到相应的元素时，编译器按照指令的`priority`属性来排列指令的编译顺序。然后依次执行每个指令的`compile`函数。每个`compile`函数都有意此个更改该指令所对应的DOM模板的机会，然后，每个`compile`函数返回一个`link`函数。这些函数构成一个“合并的”连接函数，它会调用每个指令返回的`link`函数。
+3. 之后，`$compile`调用第二部返回的连接函数，将模板和对应的作用域连接。而这又会依次调用连接函数中包含的每个指令对应的`linnk`函数，进而在各个DOM元素上注册监听器以及在相应的`scope`中设置对应的`$watch S`。
+
+经历这三个阶段之后，结果是我们得到了一个作用域和DOM绑定的实时视图。所以在这之后，任一发生在已经经过编译的作用域上的数据模型的变化都会反映在DOM之中。
+
+使用`$compile`服务的相关代码。
+
+``` js
+let $compile = .....; // injected into your code;
+let scope = .....;
+let parent = ...; // DOM element where the compiled template can be appended
+
+let html = '<div ng-bind="exp"></div>';
+
+// Step 1: parse HTML into DOM element
+let template = angular.element(html);
+
+// Step 2: compile the template
+let linkFn = $compile(template);
+
+// Step 3: link the compiled template with the scope
+let element = linkFn(scope);
+
+// Step 4: Append to DOM(optional)
+parent.appendChild(element);
+```
+
+**compile和link的区别**
+
+任何时候任一数据模型的改变引起的DOM结构的改变都需要这种两阶段编译的支持。
+
+指令有compile function是不多见的，因为大部分指令通常只关心如何操作特定的DOM元素实例，而不是去改变它的整体结构。
+
+指令通常有link function。连接函数让指令能够往特定的DOM元素实例的克隆对象上注册监听器，同时可以将作用域中的内容复制到DOM中去。
+
+> **最佳实践**： 任何能够在实例中共享的操作，为了性能考虑，最好是都移到指令的compile function中去。
+
+**编译阶段**收集所有的指令并按照优先级排序，之后在**连接阶段**将特定的作用域实例与特定的<li>实例连接。
+
+> **注意**： *连接*意味着在DOM上设置监听器以及在相关的作用域中设置`$watch`以保证二者(DOM和作用域)的同步。
+
+**作用域与Transcluded指令是如何工作的**
+
+无法理解！
+
+### AngularJS数据绑定(Data Binding)
+
+在Angular网页应用中，数据绑定是数据模型(model)与视图(view)组件的自动同步。Angular的实现方式允许我们把应用中的模型看成单一数据源。而视图始终是数据模型的一种展现形式。当模型改变时，视图就能反映这种改变，反之亦然。
+
+### AngularJS控制器(Controllers)
+
+在Angular中，控制器就像是JavaScript中的**构造函数**一样，是用来增强Angular作用域(scope)的。
+
+当一个控制器通过`ng-controller`指令被添加到DOM中时，ng会调用该控制器的**构造函数**来生成一个控制器对象，这样，就创建了一个新的**子级 作用域(scope)**。在这个构造函数中，作用域(scope)会作为`$scope`参数注入其中，并允许用户代码访问它。
+
+一般情况下，我们使用控制器做两件事：
+- 初始化`$scope`对象
+- 为`$scope`对象添加行为(方法)
+
+#### 初始化`$scope`对象
+
+当我们创建应用程序时，我们通常需要为Angular的`$scope`对象设置初始状态，这是通过在`$scope`对象上添加属性实现的。这些属性就是供在视图展示用的**视图模型**(view model)，它们在与此控制器相关的模板中均可访问到。
+
+下面这个例子定义了一个非常简单的控制器构造函数：`GreetingCtrl`，我们在该控制器所创建的scope中添加一个`greeting`属性：
+
+``` js
+function GreetingCtrl ($scope) {
+  $scope.greeting = 'Hola';
+}
+```
+
+如上所示，我们有了一个控制器，它初始化了一个`$scope`对象，并且有一个`greeting`属性。当我们把该控制器关联到DOM节点上，模板就可以通过数据绑定来读取它。
+
+``` html
+<div ng-controller="GreetingCtrl">
+  {{greeting}}
+</div>
+```
+
+**注意**： 虽然Angular允许我们在全局作用域下(window)定义控制器函数，但是**建议不要**用这种方式。在一个实际应用程序中，推荐在Angular模块下通过`.controller`为应用创建控制器。
+
+``` js
+let myApp = angular.module('myApp', []);
+
+myApp.controller('GreetingCtrl', ['$scope', function($scope){
+  $scope.greeting = 'Hola';
+}]);
+```
+
+#### 为`$scope`对象添加行为
+
+为了对事件做出响应，或是在视图中执行计算，我们需要为scope提供相关的操作的逻辑。
+
+举个例子：
+
+``` js
+let myApp = angular.module('myApp', []);
+
+myApp.controller('DoubleCtrl', function ($scope) {
+  $scope.double = function (value) {
+    return value * 2;
+  }
+});
+```
+
+当上述控制器被添加到DOM之后，`double`方法即可被调用，如在模板中的一个Angular表达式中：
+
+``` html
+<div ng-controller="DoubleCtrl">
+  <input ng-model="num">翻倍之后等于
+</div>
+```
+
+#### 正确使用控制器
+
+通常情况下，控制器不应该被赋予太多的责任和义务，它只需要负责一个单一视图所需的业务逻辑。
+
+最常见的保持控制器“纯度”的方法是将那些不属于控制器的逻辑都封装到服务(service)中，然后在控制器中通过依赖注入调用相关服务。详见“依赖注入 服务”这两部分。
+
+注意，下面的场合**千万不要用控制器**：
+- 任何形式的DOM操作：控制器值应该包含业务逻辑。DOM操作则属于应用程序的表现层逻辑操作，向来以测试难度之高闻名于业界。把任何表现层的逻辑放在控制器中将会大大增加业务逻辑的测试难度。ng提供数据绑定
