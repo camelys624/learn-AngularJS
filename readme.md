@@ -523,4 +523,52 @@ myApp.controller('DoubleCtrl', function ($scope) {
 最常见的保持控制器“纯度”的方法是将那些不属于控制器的逻辑都封装到服务(service)中，然后在控制器中通过依赖注入调用相关服务。详见“依赖注入 服务”这两部分。
 
 注意，下面的场合**千万不要用控制器**：
-- 任何形式的DOM操作：控制器值应该包含业务逻辑。DOM操作则属于应用程序的表现层逻辑操作，向来以测试难度之高闻名于业界。把任何表现层的逻辑放在控制器中将会大大增加业务逻辑的测试难度。ng提供数据绑定
+- 任何形式的DOM操作： 控制器值应该包含业务逻辑。DOM操作则属于应用程序的表现层逻辑操作，向来以测试难度之高闻名于业界。把任何表现层的逻辑放在控制器中将会大大增加业务逻辑的测试难度。ng提供数据绑定(数据绑定)来实现自动化的DOM操作。如果需要手动进行DOM操作，那么最好将表现层的逻辑封装在指令中。
+- 格式化输入： 使用**angular表单控件**代替
+- 过滤输出： 使用**angular过滤器**代替
+- 在控制器间复用有状态或无状态的代码： 使用**angular服务**代替
+- 管理其他部件的生命周期(如手动创建service实例)
+
+#### 将控制器与scope对象关联
+
+通过两种方法可以实现控制器和scope对象的关联：
+- `ngController`指令这个指令就会创建一个新的scope
+- $route路由服务
+
+**简单的控制器范例**
+
+我们用以下几个部件来构建一个小型应用：
+- 一个由两个按钮和一条简单反馈构成的模板
+- 一个名为`spice`的数据模型对象，是一个字符串
+- 一个拥有两个方法的控制器，可以设置`spice`的值
+
+``` html
+<div ng-app="spicyApp1" ng-controller="SpicyCtrl">
+ <button ng-click="chiliSpicy()">Chili</button>
+ <button ng-click="jalapenoSpicy()">Jalapeño</button>
+ <p>The food is {{spice}} spicy!</p>
+</div>
+```
+
+``` js
+var myApp = angular.module('spicyApp1', []);
+
+myApp.controller('SpicyCtrl', ['$scope', function($scope){
+    $scope.spice = 'very';
+
+    $scope.chiliSpicy = function() {
+        $scope.spice = 'chili';
+    };
+
+    $scope.jalapenoSpicy = function() {
+        $scope.spice = 'jalapeño';
+    };
+}]);
+```
+
+上面的例子中有几个值得注意的地方：
+  - `ng-controller`指令用来为我们的模板创建一个scope，而且它受到`SpicyCtrl`控制器的管理
+  - `SpicyCtrl`就是一个普通的Javascript函数，只是命名上以首字母大写，以"Ctrl"或"Controller"结尾
+  - 把一个属性指定给`$scope`这样会创建或更新一个数据模型
+  - 控制器的方法可以通过在scope中添加函数来创建，如`chiliSpicy`方法
+  - 控制器的方法和属性在模板/视图中都是可以获得的，在上例中的`<div>`元素及其子节点
