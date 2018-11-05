@@ -572,3 +572,228 @@ myApp.controller('SpicyCtrl', ['$scope', function($scope){
   - 把一个属性指定给`$scope`这样会创建或更新一个数据模型
   - 控制器的方法可以通过在scope中添加函数来创建，如`chiliSpicy`方法
   - 控制器的方法和属性在模板/视图中都是可以获得的，在上例中的`<div>`元素及其子节点
+
+#### 控制器范例扩展--带参数
+
+控制器方法可以带参数
+
+``` html
+<div ng-app="spicyApp2" ng-controller="SpicyCtrl">
+  <input ng-model="customSpice">
+  <button ng-click="spicy('chili')">Chili</button>
+  <button ng-click="spicy(customSpice)">Custom spice</button>
+  <p>The food is  spicy!</p>
+</div>
+```
+
+``` js
+var myApp = angular.module('spicyApp2', []);
+
+myApp.controller('SpicyCtrl', ['$scope', function($scope){
+    $scope.customSpice = "wasabi";
+    $scope.spice = 'very';
+
+    $scope.spicy = function(spice){
+        $scope.spice = spice;
+    };
+}]);
+```
+
+#### Scope继承范例
+
+我们常常会在不同层级的DOM结构中添加控制器。由于`ng-controller`指令会创建新的子级scope，这样我们就会获得一个与DOM层级结构相对应的基于继承关系的scope层级结构。底层（内层）控制器的`$scope`能够访问高层控制器的scope中定义的属性和方法。
+
+下面是一个拥有三层div结构，demo中的蓝色边框很清晰的展现了scope的层级和DOM层级的对应关系。他还展示了"scope"是由`ng-controller`指令创建并由其对应的控制器所管理这个概念。
+
+``` html
+<div class="spicy">
+  <div ng-controller="MainController">
+    <p>Good {{timeOfDay}}, {{name}}!</p>
+
+    <div ng-controller="ChildController">
+      <p>Good {{timeOfDay}}, {{name}}!</p>
+
+      <div ng-controller="GrandChildController">
+        <p>Good {{timeOfDay}}, {{name}}!</p>
+      </div>
+    </div>
+  </div>
+</div>
+```
+
+``` js
+var myApp = angular.module('scopeInheritance', []);
+myApp.controller('MainController', ['$scope', function($scope) {
+  $scope.timeOfDay = 'morning';
+  $scope.name = 'Nikki';
+}]);
+myApp.controller('ChildController', ['$scope', function($scope) {
+  $scope.name = 'Mattie';
+}]);
+myApp.controller('GrandChildController', ['$scope', function($scope) {
+  $scope.timeOfDay = 'evening';
+  $scope.name = 'Gingerbread Baby';
+}]);
+```
+
+上面例子中我们在HTML模板中嵌套了三个`ng-controller`指令，这导致我们的视图中有4个scope:
+- root scope，所有作用域的“根”
+- `MainCtrl`控制器管理的scope，拥有`timeOfDay`和`name`两个属性
+- `ChildCtrl`控制器管理的scope，继承了`MainCtrl` scope中的`timeOfDay`属性，但重写了它的`name`属性
+- `GrandChildCtrl`控制器管理的scope，重写了`MainCtrl` scope中的`timeOfDay`属性和`ChildCtrl` scope中的`name`属性
+
+#### 控制器的单元测试
+
+虽然我们有很多方法可以对控制器进行测试，但是在这里，我们仅展示最常见的一种，包括注入`$rootScope`以及`$controller`：
+**控制器定义：**
+
+``` js
+var myApp = angular.module('myApp', []);
+
+myApp.controller('MyController', function ($scope) {
+  $scope.spices = [{"name":"pasilla", "spiciness":"mild"},
+                   {"name":"jalapeno", "spiceiness":"hot hot hot!"},
+                   {"name":"habanero", "spiceness":"LAVA HOT!!"}];
+  $scope.spice = "habanero";
+});
+```
+
+**控制器测试：**
+
+``` js
+describe('myController function', function () {
+  describe('myController', function () {
+    var $scope;
+    beforeEach(module('myApp'));
+    beforeEach(inject(function($rootScope, $controller){
+      $scope = $rootScope.$new();
+      $controller('MyController', {$scope: $scope});
+    }));
+    it('should create "spices" model with 3 spice', function () {
+      expect($scope.spices.length).toBe(3);
+    });
+    it('should set the default value of spice', function () {
+      expect($scope.spice).toBe('habanero');
+    });
+  });
+});
+```
+
+如果需要测试嵌套关系的控制器，那么在测试代码中，我们也得创建对应于scope层级结构的测试代码：
+
+``` js
+describe('state', function () {
+  var mainScope, childScope, grandChildScope;
+  beforeEach(module('myApp'));
+  beforeEach(inject(function($rootScope, $controller) {
+    mainScope = $rootScope.$new();
+    $controller('MainCtrl', {$scope: mainScope});
+    childScope = mainScope.$new();
+    $controller('ChildCtrl', {$scope: childScope});
+    grandChildScope = childScope.$new();
+    $controller('GrandChildCtrl', {$scope: grandChildScope});
+  }));
+  it('should have over an selected', function() {
+    expect(mainScope.timeOfDay).toBe('moring');
+    expect(mainScope.name).toBe('Nikki');
+    expect(childScope.timeOfDay).toBe(morning);
+    expect(childScope.name).toBe('Mattie');
+    expect(grandChildScope.timeOfDay).toBe('evening');
+    expect(grandChildScope.name).toBe('Gingerbread Baby')
+  });
+});
+```
+
+### AngularJS服务(Services)
+
+依赖注入
+
+### AngularJS作用域(Scope)
+
+`作用域(scope)`
+- 是一个存储应用数据模型的对象
+- 为*表达式*提供了一个执行上下文
+- 作用域的层级结构对应于DOM树结构
+- 作用域可以监听*表达式*的变化并传播事件
+
+#### 作用域有什么
+
+- 作用域提供了(`$watch`)方法监听数据模型的变化
+- 作用域提供了(`$apply`)方法把不是由Angular触发的数据模型的变化引入Angular的控制范围内(如控制器，服务，以及Angular事件处理器等)
+- 作用域提供了基于原型链继承其父作用域属性的机制，就算是嵌套于独立的应用组件中的作用域也可以访问共享的数据模型
+- 作用域提供了*表达式*的执行环境，比如像`{{username}}`这个表达式，必须是在一个拥有这个属性的作用域中执行才会有意义，也就是说，作用域中可能会像这样`scope.username`或者是`$scope.username`.
+
+#### 作用域作为数据模型使用
+
+作用域是Web应用的控制器和视图之间的粘接剂。在Angular中，最直观的表现是：在自定义指令中，处在模板的链接(linking)阶段时，`指令(directive)`会设置一个`$watch`函数监听作用域中各表达式。这个`$watch`允许指令在作用域中的属性变化时收到通知，进而让指令能够根据这个改变来对DOM进行重新渲染，一边更新已改变的属性值(**属性值就是scope对象中的属性，也就是数据模型**)。
+
+其实，不知上面所说的指令拥有只想作用域的引用,控制器中也有(**可以理解为控制器与指令均能引用到与它们对应的DOM结构所处的作用域**)。但是控制器与指令时相互分离的，而且它们与视图之间也是分离的，这样的分离，或者说耦合度低，可以大大提高对用进行测试的工作效率。
+
+可以很简单的理解为有以下两个链条关系：
+- 控制器 --> 作用域 --> 视图(DOM)
+- 指令 --> 作用域 --> 视图(DOM)
+
+``` html
+<div ng-controller="MyController">
+  Your name:
+    <input type="text" ng-model="username">
+    <button ng-click='sayHello()'>greet</button>
+    <hr>
+  {{greet}}
+</div>
+```
+
+``` js
+angular.module('scopeExample', [])
+.controller('MyController', ['$scope', function ($scope) {
+  $scope.username = 'World';
+  $scope.sayHello = function () {
+    $scope.greeting = 'Hello' + $scope.username + '!';
+  };
+}]);
+```
+
+在上面这个例子中，我们有：
+- 控制器： `MyController`，它引用了`$scope`并在其上注册了两个属性和方法
+- $scope对象：持有上面例子所需的数据模型，包括`username`属性、`greeting`属性(在`sayHello()`方法被调用的时候注册的)和`ssayHello()`方法。
+- 视图：拥有一个输入框、一个按钮以及一个利用双向绑定来显示数据的内容块
+
+具体整个示例有这样两个流程，**从控制器发起的角度**来看就是：
+1. 控制器往作用域中写属性：
+   - 给作用域中的`username`赋值，然后作用域通知视图中的`input`数据变化了，`input`因为通过`ng-model`实现了双向绑定可以知道`uername`的变化，进而在视图中渲染出改变的值。
+2. 控制器往作用域中写方法
+   - 给作用域的`sayHello()`方法赋值，该方法被视图中的`button`调用，因为`button`通过`ng-click`绑定了该方法，当用户点击按钮时，`sayHello()`被调用，这个方法读取作用域中的`username`属性，加上前缀字符串`Hello`，然后赋值给在作用域中新创建的`greeting`属性
+
+整个示例的过程如果从**视图的角度看**，那主要是以下三个部分：
+1. `input`中的渲染逻辑：展示了通过`ng-model`进行的作用域和视图中某表单元素的双向绑定
+   - 根据`ng-model`中的`username`去作用域中取，如果已经有值，那么用这个默认值填充当前的输入框
+   - 接受用户输入，并且将用户输入的字符串传给`username`，这时候作用域中的该属性值实时更新为用户输入的值
+2. `button`中的逻辑
+   - 接受用户点击，调用作用域中的`sayHello()`方法
+3. `{{greeting}}`的渲染逻辑
+   - 在用户为单击按钮时，不显示内容
+   - *取值阶段*：在用户单击后，这个表达式会去scope中取`greeting`属性，而这个作用域和控制器是同一个的，这时候，该作用域下`greeting`属性已经有了，这时候这个属性就被取回来了
+   - *计算阶段*：在当前作用域下去计算`greeting`表达式，然后渲染视图，显示`Hello World`
+
+我们可以知道：**作用域(scope)对象以及其属性是视图渲染的唯一来源。
+
+从测试的角度来看，视图与控制器分离的需求在于它允许测试人员可以单独对应用的操作逻辑进行测试，而不必考虑页面的渲染细节。
+
+``` js
+it('should say hello', function () {
+  var scopeMock = {};
+  var cntl = new MyController(scopeMock);
+
+  // 确保username被预先填充为World
+  except(scopeMock.username).toEqual('World');
+
+  // 确保我们输入了新的username后得到了正确的greeting值
+  scopeMock.username = 'angular';
+  scopeMock.sayHello();
+  expect(scopeMock.greeting).toEqual('Hello angular!');
+});
+```
+
+#### 作用域分层结构
+
+如上所说，作用域的结构对应于DOM结构，那么最顶层，和DOM树有根节点一样，每个Angular应有且仅有一个`root scope`，当然，子级作用域就和DOM树的子节点一样，可以有多个的。应用可以拥有多个作用域，比如[指令]
