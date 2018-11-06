@@ -796,4 +796,127 @@ it('should say hello', function () {
 
 #### 作用域分层结构
 
-如上所说，作用域的结构对应于DOM结构，那么最顶层，和DOM树有根节点一样，每个Angular应有且仅有一个`root scope`，当然，子级作用域就和DOM树的子节点一样，可以有多个的。应用可以拥有多个作用域，比如[指令]
+如上所说，作用域的结构对应于DOM结构，那么最顶层，和DOM树有根节点一样，每个Angular应有且仅有一个`root scope`，当然，子级作用域就和DOM树的子节点一样，可以有多个的。应用可以拥有多个作用域，比如[指令]()会创建子级作用域。一般情况下，当新的作用域被创建时，它是以嵌入父级作用域的子级的形式被创建的，这样就形成了与其所关联的DOM树所对应的一个作用域的树结构。作用域的分层的一个简单例子就是，假设现在HTML视图中有一个表达式{{name}}，Angular需要经历取值和计算两个阶段才能最终再视图渲染结果。那么这个取值的阶段，其实就是根据作用域的这个层级结构（或树状结构）来进行的。
+- 首先，Angular在该表达式当前所在的DOM节点所对应的作用域中去找有没有`name`这个属性
+- 如果有，Angular返回取值，计算渲染；如果再当前作用域中没有找到，那么Angular继续往上一层的父级作用域中去找`name`属性，直到找到为止，最后实在没有，那就到达`$rootScope`
+
+#### 从DOM中抓取作用域
+
+作用域对象是与指令或控制器等Angular元素所在的DOM节点相关联的，也就是说，其实DOM节点上是可以抓取到作用域这个对象的。而对于`$rootScope`在哪里抓，它藏在`ng-app`指令所在的那个DOM节点之中。
+
+如何在调试的时候抓取作用域：
+1. F12调出debugger
+2. 此时，调试器(debugger)允许我们使用变量`$0`来获取选择的元素
+3. 在console中执行`angular.element($0).scope()`或直接输入$scope即可看到想要查询的当前DOM元素节点绑定的作用域了
+
+-------------
+
+#### 基于作用域的事件传播
+
+作用域可以像DOM节点一样，进行事件的传播。主要是有两个方法：
+- `broadcasted`：从父级作用域广播至子级scope
+- `emitted`：从子级作用域往上发射到父级作用域
+
+例子：
+
+``` html
+<div data-ng-controller="EventController">
+    Root作用域<tt>MyEvent</tt>count:{{count}}
+    <ul>
+        <li data-ng-repeat="i in [1]" data-ng-controller="EventController">
+            <button data-ng-click="$emit('MyEvent')">$emit('MyEvent')</button>
+            <button data-ng-click="$broadcast('MyEvent')">$broadcast('MyEvent')</button>
+            <br>
+            Middle作用域<tt>MyEvent</tt>count:{{count}}
+            <ul>
+                <li data-ng-repeat="item in [1, 2]" data-ng-controller="EventController">
+                    Leaf作用域<tt>MyEvent</tt>count:{{count}}
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+```
+
+``` js
+angular.module('eventExample', [])
+.controller('EventController', ['$scope', function ($scope) {
+    $scope.count = 0;
+    $scope.$on('MyEvent', function () {
+        $scope.count++;
+    })
+}]);
+```
+
+前面的例子中有几个值得注意的点：
+- `$emit`和`$broadcast`是直接被写在html模板中的，而不是写在控制器的JavaScript代码中，因为这两个方法是直接在$scope中就有的。
+- 同一个控制器`EventController`被用在了三个不同的DOM节点中
+- 上面的事件无非就是点击两个按钮，分别触发广播/冒泡事件，然后在各节点设置监听，这里只要用`$scope.$on()`方法，就可以监听。
+
+#### 作用域的生命周期
+
+**scope生命周期拆解**
+
+1. **创建期**
+    `root scope`是在应用程序启动时由`$injector`创建的。另外，在指令的模板链接阶段(template linking)，指令会创建一些新的子级scope.
+2. **注册$watch**
+    在模板链接阶段(template linking)，指令会往作用域中注册`监听器(watch)`，而且不止一个。这些`$watch`用来监听数据模型的更新并将更新值传给DOM。
+3. **数据模型变化**
+    要想让数据模型的变化能够很好的被Angular监测，需要让他们在`scope.$apply()`里发生。这些Angular已经隐式的为我们做了这一点。
+4. **数据模型变化监测**
+    在把数据变化`$apply`进来之后，Angular开始进入`$digest`轮循(就是调用`$digest()`方法)，首先是rootscope进入`$digest`，然后由其把各个监听表达式或是函数的任务传播分配给所有的子级作用域，那样各个作用域就各司其职了，如果监听到子级负责的数据模型有变化，马上就调用`$watch`。
+5. **销毁作用域**
+    当子级作用域不再需要的时候，这时候创建它们的就会负责把它们回收或是销毁（**在指令中，创建是隐式的，销毁不但可以是隐式的，也可以是显式的，如`$scope.$destroy()`。销毁是通过`scope.$destroy()`这个方法。销毁之后，`$digest()`方法就不会继续往子级作用域传播了，这样也就可以让垃圾回收系统把这个作用域上用来存放数据模型的内存给回收利用了。
+
+**用域的执行上下文**
+
+浏览器接收一个事件的标准的工作流程应该是：
+
+> 接收事件 --> 触发回调 --> 回调执行结束返回 --> 浏览器重绘DOM --> 浏览器返回等待下一个事件
+
+上面的过程中，如果一切都发生在Angular的执行上下文的话，那就相安无事，Angular能够知道数据模型发生改变；但是如果当浏览器的控制权跑到原生的Javascript中去时（如通过jQuery监听事件之类的非Angular的回调等），那么应用执行的上下文就会发生在Angular的上下文之外了，这样就导致Angular无法知晓数据模型的任何改变。想要让Angular重新掌权并知晓正在发生的数据模型的变化的话，那就需要通过使用`$apply`方法让上下文执行环境重新进入到Angular的上下文中(`$scope.$apply()`)。只有执行上下文重新回到Angular中，那样数据模型的改变才能被Angular所识别并作出相应的操作。
+
+比如`ng-click`这个指令，监听DOM事件时，表达式的计算就必须放在`$apply()`中。
+
+在计算完表达式之后，`$apply()`方法执行Angular的`$digest`阶段。在`$digest`阶段，scope检查所有通过`$watch`监测的表达式（或别的数据）并将其与它们之前的值进行比较。这就是所谓的`脏值检查(dirty checking)`。另外，需要注意的是，`$watch`的监测是异步执行的。这就意味着当前给一个作用域中的`digest()`阶段跑完($digest阶段可以认为是缓冲阶段，而且是必要的阶段)。通过`$disgest()`给我们提供的这个延迟是很有必要的，也是应用程序常常想要的，因为有这个延迟，我们可以等待几个或多个数据模型的改变/更新攒到一起，合并起来放到一个`$watch()`中去监测，而且这样也能从一定程度上保证在一个`$watch()`在监测期间没有别的`$watch()`在执行。这样，当前的`$watch()`可以返回给应用最准确的更新通知，进而刷新视图或者是进入一个新的`$digest()`阶段。
+
+**作用域和指令**
+
+在编译（或者说解析）阶段，编译器在HTML解析器解析页面遇到非传统的或是自己不能识别的标签或别的表达式时，Angular编译器就将这些HTML解析器不懂得东西（其实就是指令）在当前DOM环境下解析出来。通常指令分为两种，一种时我们常说的指令，另外一种就是我们通常叫它Angular表达式的双大括号形式，具体如下：
+- 监测型指令，像双大括号表达式`{{expression}}`。这种类型的指令需要在`$watch()`方法中注册一个监听处理器来监听控制器或是别的操作引起的表达式值改变，进而来更新视图。
+- 监听型指令，像`ng-click`，这种是在HTML标签属性中直接写好当`ng-click`发生时调用什么处理器，当DOM监听到`ng-click`被触发时，这个指令就会通过`$apply()`方法执行相关的表达式操作或是别的操作进而更新视图。
+
+综上，无论是哪种类型的指令，当外部事件（可能是用户输入，定时器，ajax等）发生时，相关的表达式必须要通过`$apply()`作用于相应的作用域，这样所有的监听器才能被正确更新，然后进行后续的相关操作。
+
+**可以创建作用域的指令**
+
+大多数情况下，指令和作用域相互作用，但并不创建作用域的新实例。但是，有一些特殊的指令，如`ng-controller`和`ng-repeat`等，则会创建新的上下级作用域，并且把这个新创建的作用域和相应的DOM元素相关`angular.element(aDomElement).scope()`方法。
+
+**作用域与控制器**
+
+作用域和控制器的交互大概有以下几种情况：
+- 控制器通过作用域对模板暴露一些方法供其调用，详见`ng-controller`
+- 控制器中定义的一些方法（行为或逻辑）可以改变注册在作用域下的数据模型（也就是作用域的属性）
+- 控制器在某些场合可能需要设置监听器来监听作用域中的数据模型。这些监听器在控制器的相关方法被调用时立即执行。
+
+**作用域`$watch`性能**
+
+因为在Angular中对作用域进行脏值检查(`$watch`)实时跟踪数据模型的变化时一个非常繁琐的操作，所以，进行脏值检查的这个函数必须是高效的。一定要注意的是，**用`$watch`进行脏值检查时，一定不要做任何的DOM操作**，因为DOM操作拖慢甚至时拖垮整体性能的能力比在javascript对象上做属性操作高好几个数量级。
+
+**Scope `$watch` Depths**
+
+Dirty checking can be done with three strategies:By reference,by conllection contents,and by value.The strategies differ in the kinds of changes they detect,and in their performance characteristics.
+
+![](image\10.png)
+
+#### 与浏览器事件轮循整合
+
+![](image\11.png)
+
+上图与示例描述了Angular如何与浏览器事件轮循进行交互。
+1. 浏览器的事件轮循等待事件到来，事件可以是用户交互，定时器事件，或是网络事件（如ajax返回）
+2. 事件发生，其回调被执行，回调的执行就使得应用程序的执行上下文进入到了JavaScript的上下文。然后在JavaScript的上下文中执行，并修改相关的DOM结构
+3. 一旦回调执行完毕，浏览器就离开JavaScript的上下文回到浏览器上下文并基于DOM结构的改变重新渲染视图
+
+Angular是插进了JavaScript的上下文中，通过提供Angular自己的事件处理轮循来改变正常的JavaScript工作流。它其实是把JavaScript上下文分成了两块:一个是传统的JavaScript执行上下文（图中浅蓝色区域），一个是Angular的执行上下文（图中的淡黄色区域）。只有在Angular上下文执行的操作才会受益于Angular的数据绑定，异常处理，属性检测，等等。当然，如果不在Angular的上下文中，也可以使用`$apply()`来进入Angular的执行上下文。需要注意的是，`$apply()`在Angular本身的很多地方（如控制器，服务等）都已经被隐式的调用了处理事件轮循。显式的使用`$apply()`只有在JavaScript上下文或是从第三方类库的回调中想要进入Angular时才需要。具体流程如下：
+1. 进入Angular执行上下文的方法，调用`scope.$apply(stimulusFn)`。上面`$apply()`中的参数`stimulusFn`是你想要让它进入Angular上下文的代码
