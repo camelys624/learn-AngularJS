@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en" data-ng-app="">
+<head>
+    <meta charset="UTF-8">
+    <title>自定义过滤器(filters)</title>
+    <script src="//cdn.bootcss.com/angular.js/1.5.8/angular.min.js"></script>
+    <script src="../js/filter.js"></script>
+</head>
+<body>
+<div data-ng-controller="MyController">
+    <input data-ng-model="greeting" type="text">
+    <br/>
+    未添加过滤器：{{greeting}}
+    <br/>
+    逆置：{{greeting|reverse}}
+    <br/>
+    逆置+大写：{{greeting|reverse:true}}
+    <br/>
+</div>
+</body>
+</html>
