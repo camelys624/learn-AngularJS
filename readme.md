@@ -920,3 +920,195 @@ Dirty checking can be done with three strategies:By reference,by conllection con
 
 Angular是插进了JavaScript的上下文中，通过提供Angular自己的事件处理轮循来改变正常的JavaScript工作流。它其实是把JavaScript上下文分成了两块:一个是传统的JavaScript执行上下文（图中浅蓝色区域），一个是Angular的执行上下文（图中的淡黄色区域）。只有在Angular上下文执行的操作才会受益于Angular的数据绑定，异常处理，属性检测，等等。当然，如果不在Angular的上下文中，也可以使用`$apply()`来进入Angular的执行上下文。需要注意的是，`$apply()`在Angular本身的很多地方（如控制器，服务等）都已经被隐式的调用了处理事件轮循。显式的使用`$apply()`只有在JavaScript上下文或是从第三方类库的回调中想要进入Angular时才需要。具体流程如下：
 1. 进入Angular执行上下文的方法，调用`scope.$apply(stimulusFn)`。上面`$apply()`中的参数`stimulusFn`是你想要让它进入Angular上下文的代码
+2. 进入`$apply()`之后，Angular执行`stimulusFn()`，而这个函数通常会改变应用程序的状态（可能是数据，或是方法调用）
+3. 之后，Angular进入`$digest`轮循。这个沦胥是由两个较小的轮循构成，一个是处理`$evalAsync`队列（异步计算的队列），另一个是处理`$watch`列表。`$digest`轮循不断迭代变更（在`$eval`和`$watch`之间变更）直到数据模型稳定，这个状态其实就是`evalAsync`队列为空且`$watch`列表不再监测到变化为止。（**其实这里就是所有外来的异步操作堆起来成为一个队列，由`$eval`一个一个计算，然后`$watch`看一下这个异步操作对应的数据模型是否还有改变，有改变，就继续`$eval`这个异步操作，如果没改变，那就拿异步操作队列里的下一个异步操作重复上面的步骤，直到异步操作队列为空以及`$watch`不再监测到任何数据模型变化为止**）
+4. `$evalAsync`队列是用来安排那些待进入Angular`$digest`的异步操作，这些操作往往是在浏览器的视图渲染之前，且常常是通过`setTimeout(0)`触发。但是用`setTimeout(0)`这个方法就不得不承受缓慢迟钝的响应以及可能引起的闪屏
+5. `$watch`列表则是存放了一组经过`$eval`迭代之后可能会改变的Angular的表达式集合。如果数据模型变化被监测到，那么`$watch`函数调用进而用新值更新DOM。
+6. 一旦Anguar的`$digest`轮循完成，那么应用程序的执行就会离开Angular及JavaScript的上下文。然后浏览器重新渲染DOM来反应发生的变化。
+
+接下来是传统的`Hello World`示例的流程剖析，这样就能明白整个例子是如何在用户输入时产生双向数据绑定的。
+1. 编译阶段：
+    1. `ng-model`和`input`指令在`<input>`标签中设置了一个`keydown`监听器
+    2. 在`{{greeting}}`插值（也就是表达式）这里设置了一个`$watch`来监测`username`的变化
+2. 执行阶段：
+    1. 在`<input>`输入框按下`x`键引起浏览器发出一个`keydown`事件
+    2. `input`指令捕捉到输入值的改变调用`apply("username = 'x';")`进入Angular的执行环境来更新应用的数据模型
+    3. Angular将`username = 'x';`作用在数据模型上，这样`scope.username`是被赋值为'x'了；
+    4. `$digest`轮循开始
+    5. `$watch`列表中监测到`username`有一个变化，然后通知`{{greeting}}`插值表达式，进而更新DOM
+    6. 执行离开Angular的上下文，进而`keydown`事件结束，然后执行也就是推出了JavaScript发的上下文；这样`$digest`完成
+    7. 浏览器用更新了的值重新渲染视图
+
+### AngularJS依赖注入(Dependency Injection)
+
+依赖注入(DI)是一种让代码管理其依赖关系的设计模式。
+
+#### DI简介
+
+对象或函数可以通过这三种方式获得所依赖的对象：
+1. 创建依赖，通常是通过`new`操作符
+2. 查找依赖，在一个全局的注册表中查阅它
+3. 传入依赖，需要此依赖的地方等待被依赖对象注入进来
+
+前两种方式：创建或是查找依赖都不是那么理想，因为它们都将依赖写死在对象或函数里了。问题在于，想要修改这种方式获得依赖对象的逻是很困难的。尤其是在测试的时候，会遇到很多问题，因为测试的时候常常需要我们提供所依赖对象的替身(MOCK)。
+
+第三种方式是最理想的，因为它免除了客户代码里定位相应的依赖这个负担。反过来，依赖总是还能够被简单地注入到需要它的组件中。
+
+``` js
+function SomeClass(greeter) {
+  this.greeter = greeter;
+}
+
+SomeClass.prototype.doSomething = function (some) {
+  this.greeter.greet(name);
+}
+```
+
+上述例子中，`SomeClass`不必在意它所依赖的`greeter`对象从哪里来的，只要知道一点：运行的时候`greeter`依赖已经被传进来了，直接用就可以了。
+
+这个例子的代码虽然理想，但是它把获得所依赖对象的大部分责任都放在了我们创建`SomeClass`的客户代码中。
+
+为了分离"创建依赖"的职责，每个Angular应用都有一个`injector`对象。这个`injector`是一个服务定位器，负责创建和查找某个依赖。（当你的app的某处声明需要用到某个依赖的时候，Angular会调用这个依赖注入器去查找或是创建你所需要的依赖，然后返回来给你用）
+
+下面是一个利用`injector`服务例子：
+
+``` js
+// Provide the wirting information in a module
+angualr.module('myModule', []).
+// 下面是叫injector如何构建一个'greeter'依赖
+// 注意greeter本身依赖于'$window'
+  factory('greeter', function ($window) {
+    // 这是一个factory函数，负责'greeter'服务
+    return {
+      greet: function (text) {
+        $window.alert(text);
+      }
+    };
+  });
+
+  // 从module创建的injector
+  // 这个常常是Angular启动时自动完成的
+  var injector = angular.injector(['myModule', 'ng']);
+
+  // 通过injector请求任意的依赖
+  var greeter = injector.get('greeter');
+```
+
+函数或对象通过请求依赖解决了硬编码的问题，但同时也就意味着injector需要通过应用传递，而传递injector破坏了Law of Demeter。为了弥补这个，我们通过像下面例子那样声明依赖，将依赖查找的任务丢给了injector去做：
+
+``` html
+<!-- Given this HTML -->
+<div ng-controller="MyController">
+  <button ng-click="sayHello()">Hello</button>
+</div>
+```
+
+``` js
+// And this controller definition
+function MyController($scope, greeter) {
+  $scope.sayHello = function () {
+    greeter.greet('Hello World');
+  };
+}
+
+// The 'ng-controller' directive does this behind the scenes
+injector.instantiate(MyController);
+```
+
+注意，通过让`ng-controller`在背后调用injector初始化控制器类满足了`MyController`需要依赖的需求，而且可以让控制器根本不知道injector的存在。这是最好的结果了。应用中的代码简单地提交它需要依赖的请求，不需要去管injector,而且这样也不违反迪米特法则。
+
+#### 依赖注释
+
+**此处注释非代码注释，应理解为依赖声明的方法**
+
+**推断依赖**
+
+最简单的获取依赖的方法是让函数的参数名直接使用依赖名。
+
+``` js
+function MyController($scope, greeter) {
+  doSomething...
+}
+```
+
+给injector一个函数，它可以通过检查函数声明并抽取参数名可以推断需要注入的服务名。在上面的例子中，`$scope`和`greeter`是两个需要被注入到函数中的服务。
+
+虽然这种方式很直观明了，但是它对压缩的JavaScript代码来说是不起作用的，因为压缩过后的JavaScript代码重命名了函数的参数名。这就让这种注释方式只对pretotyping和demo级应用有效。
+
+**`$inject`注释**
+
+为了让重命名了参数的压缩搬的JavaScript代码能够正确地注入相关地依赖服务。函数需要通过`$inject`属性进行标注，这个属性是一个存放需要注入的服务的数组。
+
+``` js
+var MyController = function (renamed$scope, renamedGreeter) {
+  ....
+}
+MyController['$inject'] = ['$scope', 'greeter'];
+```
+
+**行内注释**
+
+有时候用`$inject`注释的方式不方便，比如标注指令的时候（**这里可以理解为告诉指令需要加载哪些服务依赖的说明）。
+
+例子:
+
+``` js
+someModule.factory('greeter', function ($window) {
+  ...
+});
+```
+
+``` js
+var greeterFactory = function (renamed$window) {
+  ...
+};
+greeterFactory.$inject = ['$window'];
+someModule.factory('greeter', greeterFactory);
+```
+
+``` js
+someModule.factory('greeter', ['$window', function(renamed$window)])
+```
+
+上面三种依赖注释的风格是等价的，在Angular中任何支持依赖注入的地方都可以使用。
+
+**哪里使用DI
+
+在Angular中，DI无处不在。通常在控制器和工厂方法中使用比较多。
+
+> 控制器中使用DI
+
+控制器是负责应用操作逻辑的JavaScript类，推荐的在控制器中使用DI的方式使用数组标记风格。这样会避免在全局作用域内创建控制器，同时也避免了代码压缩时引起的注入问题。
+
+``` js
+someModule.controller('MyController', ['$scope', 'dep1', 'dep2', function ($scope, dep1, dep2) {
+  ...
+  $scope.aMethod = function () {
+    ...
+  }
+  ...
+}]);
+```
+
+> 工厂方法中使用DI
+
+工厂方法负责创建Angular中的绝大多数对象。例如指令，服务和过滤器等。工厂方法是注册在模块之下的，推荐的声明方式如下：
+
+``` js
+angualr.module('myModule', [])
+.config(['depProvider', function (depProvider){
+  ...
+}])
+.factory('serviceId', ['depService', function (depService) {
+  ...
+}])
+.directive('directiveName', ['depService', function (depService) {
+  ...
+}])
+.filter('filterName', ['depService', function (depService) {
+  ...
+}])
+.run(['depService', function (depService){
+  ...
+}]);
+```
